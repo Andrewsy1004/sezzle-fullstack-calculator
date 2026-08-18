@@ -1,0 +1,1 @@
+export { MathBackground } from "./MathBackground";

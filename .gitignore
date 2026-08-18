@@ -1,0 +1,20 @@
+# Backend (Go)
+backend/coverage.out
+backend/coverage.html
+backend/server
+
+# Frontend (Node)
+frontend/node_modules
+frontend/dist
+frontend/coverage
+frontend/.env
+frontend/.env.local
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+
+# Logs
+*.log

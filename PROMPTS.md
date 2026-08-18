@@ -1,0 +1,3 @@
+# Prompts Used
+
+1. Act as a Senior Software Architect and review my codebase for architecture, security, scalability, performance, maintainability, code quality, database/API design, testing, and production readiness. Identify potential issues, unnecessary complexity, technical debt, security vulnerabilities, and opportunities to apply better design patterns or architectural principles. For each important finding, briefly explain what is wrong, why it matters, and how I can improve it, prioritizing the recommendations by impact. Avoid over-engineering and only suggest patterns or architectural changes when they provide real value. At the end, give me the top 5 improvements I should make first and a short assessment of the overall architecture.
