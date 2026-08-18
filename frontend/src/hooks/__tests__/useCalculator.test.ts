@@ -202,4 +202,186 @@ describe("useCalculator", () => {
     expect(result.current.operandB).toBe("");
     expect(result.current.operation).toBe("add");
   });
+
+  it("appends a history entry with the parsed operands on success, newest first", async () => {
+    (fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ operation: "add", result: 7 }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ operation: "multiply", result: 12 }) });
+
+    const { result } = renderHook(() => useCalculator());
+    act(() => {
+      result.current.setOperandA("3");
+      result.current.setOperandB("4");
+    });
+    await act(async () => {
+      await result.current.submit();
+    });
+    await waitFor(() => expect(result.current.history).toHaveLength(1));
+    expect(result.current.history[0]).toMatchObject({ operation: "add", a: 3, b: 4, result: 7 });
+
+    act(() => {
+      result.current.setOperation("multiply");
+      result.current.setOperandA("3");
+      result.current.setOperandB("4");
+    });
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    await waitFor(() => expect(result.current.history).toHaveLength(2));
+    expect(result.current.history[0]).toMatchObject({ operation: "multiply", result: 12 });
+    expect(result.current.history[1]).toMatchObject({ operation: "add", result: 7 });
+  });
+
+  it("appends a second history entry when an identical calculation is repeated, without refetching", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ operation: "add", result: 7 }),
+    });
+
+    const { result } = renderHook(() => useCalculator());
+    act(() => {
+      result.current.setOperandA("3");
+      result.current.setOperandB("4");
+    });
+    await act(async () => {
+      await result.current.submit();
+    });
+    await waitFor(() => expect(result.current.history).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    await waitFor(() => expect(result.current.history).toHaveLength(2));
+    expect(result.current.history[0]).toMatchObject({ operation: "add", a: 3, b: 4, result: 7 });
+    expect(result.current.history[0].id).not.toBe(result.current.history[1].id);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not append to history when a request fails", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: "division by zero is not allowed" }),
+    });
+
+    const { result } = renderHook(() => useCalculator());
+    act(() => {
+      result.current.setOperation("divide");
+      result.current.setOperandA("10");
+      result.current.setOperandB("0");
+    });
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    await waitFor(() => expect(result.current.error).toBe("division by zero is not allowed"));
+    expect(result.current.history).toHaveLength(0);
+  });
+
+  it("reset() clears the form but preserves history", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ operation: "add", result: 7 }),
+    });
+
+    const { result } = renderHook(() => useCalculator());
+    act(() => {
+      result.current.setOperandA("3");
+      result.current.setOperandB("4");
+    });
+    await act(async () => {
+      await result.current.submit();
+    });
+    await waitFor(() => expect(result.current.history).toHaveLength(1));
+
+    act(() => result.current.reset());
+
+    expect(result.current.operandA).toBe("");
+    expect(result.current.result).toBeNull();
+    expect(result.current.history).toHaveLength(1);
+  });
+
+  it("clearHistory() empties history without touching the current result", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ operation: "add", result: 7 }),
+    });
+
+    const { result } = renderHook(() => useCalculator());
+    act(() => {
+      result.current.setOperandA("3");
+      result.current.setOperandB("4");
+    });
+    await act(async () => {
+      await result.current.submit();
+    });
+    await waitFor(() => expect(result.current.history).toHaveLength(1));
+
+    act(() => result.current.clearHistory());
+
+    expect(result.current.history).toHaveLength(0);
+    expect(result.current.result).toBe(7);
+  });
+
+  it("caps history at 10 entries", async () => {
+    const { result } = renderHook(() => useCalculator());
+
+    for (let i = 0; i < 12; i++) {
+      (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ operation: "add", result: i }),
+      });
+      act(() => {
+        result.current.setOperandA(String(i));
+        result.current.setOperandB("1");
+      });
+      await act(async () => {
+        await result.current.submit();
+      });
+    }
+
+    await waitFor(() => expect(result.current.history).toHaveLength(10));
+    expect(result.current.history[0]).toMatchObject({ result: 11 });
+  });
+
+  it("replays the prior successful entry (with a non-null result) after an intervening failure", async () => {
+    (fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ operation: "divide", result: 2 }) })
+      .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ error: "division by zero is not allowed" }) });
+
+    const { result } = renderHook(() => useCalculator());
+    act(() => {
+      result.current.setOperation("divide");
+      result.current.setOperandA("10");
+      result.current.setOperandB("5");
+    });
+    await act(async () => {
+      await result.current.submit();
+    });
+    await waitFor(() => expect(result.current.result).toBe(2));
+
+    act(() => result.current.setOperandB("0"));
+    await act(async () => {
+      await result.current.submit();
+    });
+    await waitFor(() => expect(result.current.error).toBe("division by zero is not allowed"));
+    expect(result.current.result).toBeNull();
+
+    act(() => result.current.setOperandB("5"));
+    await act(async () => {
+      await result.current.submit();
+    });
+
+    expect(result.current.result).toBe(2);
+    expect(result.current.error).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(result.current.history).toHaveLength(2));
+    expect(result.current.history[0]).toMatchObject({ operation: "divide", a: 10, b: 5, result: 2 });
+  });
 });

@@ -50,6 +50,15 @@ export interface ApiErrorResponse {
   error: string;
 }
 
+/** One successfully evaluated calculation, snapshotted for history display. */
+export interface HistoryEntry {
+  id: number;
+  operation: Operation;
+  a: number;
+  b?: number;
+  result: number;
+}
+
 /** Thrown by the API client on non-2xx responses or network failures. */
 export class ApiError extends Error {
   constructor(

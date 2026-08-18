@@ -117,4 +117,72 @@ describe("<Calculator />", () => {
     await user.click(screen.getByRole("button", { name: /reset/i }));
     expect(valueA.value).toBe("");
   });
+
+  it("displays the full expression, not just the bare result", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ operation: "add", result: 42 }),
+    });
+
+    const user = userEvent.setup();
+    render(<Calculator />);
+
+    await user.type(screen.getByLabelText(/value a/i), "40");
+    await user.type(screen.getByLabelText(/value b/i), "2");
+    await user.click(screen.getByRole("button", { name: /calculate/i }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("40 + 2 = 42"));
+  });
+
+  it("shows the history section only after a calculation, and lists prior expressions", async () => {
+    (fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ operation: "add", result: 42 }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ operation: "multiply", result: 6 }) });
+
+    const user = userEvent.setup();
+    render(<Calculator />);
+
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/value a/i), "40");
+    await user.type(screen.getByLabelText(/value b/i), "2");
+    await user.click(screen.getByRole("button", { name: /calculate/i }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("42"));
+
+    const list = screen.getByRole("list");
+    expect(list).toHaveTextContent("40 + 2 = 42");
+
+    await user.clear(screen.getByLabelText(/value a/i));
+    await user.clear(screen.getByLabelText(/value b/i));
+    await user.selectOptions(screen.getByLabelText(/operation/i), "multiply");
+    await user.type(screen.getByLabelText(/value a/i), "2");
+    await user.type(screen.getByLabelText(/value b/i), "3");
+    await user.click(screen.getByRole("button", { name: /calculate/i }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("6"));
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+  });
+
+  it("Clear empties the history, removes the section, and returns focus to Calculate", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ operation: "add", result: 42 }),
+    });
+
+    const user = userEvent.setup();
+    render(<Calculator />);
+
+    await user.type(screen.getByLabelText(/value a/i), "40");
+    await user.type(screen.getByLabelText(/value b/i), "2");
+    await user.click(screen.getByRole("button", { name: /calculate/i }));
+    await waitFor(() => expect(screen.getByRole("list")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /clear history/i }));
+
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^calculate$/i })).toHaveFocus();
+  });
 });

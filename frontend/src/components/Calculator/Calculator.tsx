@@ -1,6 +1,7 @@
-import type { FormEvent } from "react";
+import { useRef, type FormEvent } from "react";
 import { useCalculator } from "../../hooks";
 import { OPERATIONS, type Operation } from "../../types";
+import { formatExpression } from "./formatExpression";
 import "./Calculator.css";
 
 /**
@@ -14,7 +15,8 @@ export function Calculator() {
     operandA,
     operandB,
     operation,
-    result,
+    lastEntry,
+    history,
     error,
     isLoading,
     isUnary,
@@ -23,11 +25,19 @@ export function Calculator() {
     setOperation,
     submit,
     reset,
+    clearHistory,
   } = useCalculator();
+
+  const calculateRef = useRef<HTMLButtonElement>(null);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void submit();
+  };
+
+  const handleClearHistory = () => {
+    clearHistory();
+    calculateRef.current?.focus();
   };
 
   return (
@@ -88,7 +98,12 @@ export function Calculator() {
         </div>
 
         <div className="calculator__actions">
-          <button type="submit" className="calculator__button calculator__button--primary" disabled={isLoading}>
+          <button
+            ref={calculateRef}
+            type="submit"
+            className="calculator__button calculator__button--primary"
+            disabled={isLoading}
+          >
             {isLoading ? "Calculating…" : "Calculate"}
           </button>
           <button
@@ -102,9 +117,9 @@ export function Calculator() {
         </div>
       </form>
 
-      {result !== null && (
+      {lastEntry !== null && (
         <div className="calculator__result" role="status">
-          Result: <strong>{result}</strong>
+          {formatExpression(lastEntry)}
         </div>
       )}
 
@@ -112,6 +127,31 @@ export function Calculator() {
         <div className="calculator__error" role="alert">
           {error}
         </div>
+      )}
+
+      {history.length > 0 && (
+        <section className="calculator__history">
+          <div className="calculator__history-header">
+            <h2 id="calculator-history-heading" className="calculator__history-title">
+              History
+            </h2>
+            <button
+              type="button"
+              className="calculator__history-clear"
+              aria-label="Clear history"
+              onClick={handleClearHistory}
+            >
+              Clear
+            </button>
+          </div>
+          <ol className="calculator__history-list" aria-labelledby="calculator-history-heading" tabIndex={0}>
+            {history.map((entry) => (
+              <li key={entry.id} className="calculator__history-item">
+                {formatExpression(entry)}
+              </li>
+            ))}
+          </ol>
+        </section>
       )}
     </div>
   );
